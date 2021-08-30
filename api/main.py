@@ -1,4 +1,5 @@
 import json
+import time
 import uasyncio
 from nanoweb.nanoweb import Nanoweb
 from serial.serial import Serial
@@ -8,10 +9,16 @@ app = Nanoweb(port=8080)
 op = 's'
 
 
-def wrap(fn):
+def log(fmt, *args):
+    t = time.localtime()
+    print('[{}]'.format(time.strftime('%Y-%m-%d %H:%M:%S')), fmt.format(*args))
+
+
+def respond(fn):
     """A mixin decorator to simplify handlers like Flask"""
 
     async def wrapper(req):
+        log('{} {}', req.method, req.url)
         res = await fn(req)
 
         if isinstance(res, tuple):
@@ -37,7 +44,7 @@ def wrap(fn):
 
 
 @app.route('/operation')
-@wrap
+@respond
 async def operation(req):
     global op
 
@@ -65,7 +72,7 @@ async def operation(req):
 
 
 @app.route('/healthz')
-@wrap
+@respond
 async def healthz(req):
     return 200, {'message': "I'm as ready as I'll ever be!"}
 
