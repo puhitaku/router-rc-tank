@@ -1,8 +1,11 @@
 import json
 import uasyncio
 from nanoweb.nanoweb import Nanoweb
+from serial.serial import Serial
 
+s = Serial('/dev/ttyACM0', 115200)
 app = Nanoweb(port=8080)
+op = 's'
 
 
 def wrap(fn):
@@ -33,26 +36,45 @@ def wrap(fn):
     return wrapper
 
 
-@app.route('/ping')
+@app.route('/operation')
 @wrap
-async def ping(req):
-    return 200, 'pong'
+async def operation(req):
+    global op
+
+    if req.method == 'GET':
+        return 200, {'operation': op, 'error': None}
+    elif req.method == 'PUT':
+        content_type = req.headers.get('Content-Type')
+        if content_type != 'application/json':
+            return 400, {'operation': op, 'error': 'bad request, incorrect content type'}
+
+        content_len = req.headers.get('Content-Length')
+        if content_len is None:
+            return 400, {'operation': op, 'error': 'bad request, has no request body'}
+
+        body_bytes = await req.read(int(content_len))
+        body = json.loads(body_bytes.decode())
+        if 'operation' not in body:
+            return 400, {'operation': op, 'error': 'bad request, lacks operation key'}
+
+        op = body['operation']
+        s.write(op)
+        return 200, {'operation': op, 'error': None}
+    else:
+        return 405, {'operation': op, 'error': 'method not allowed'}
 
 
 @app.route('/healthz')
 @wrap
-async def ping(req):
+async def healthz(req):
     return 200, {'message': "I'm as ready as I'll ever be!"}
-
-
-# Static files
-app.routes.update(
-    {
-        '/index.html': ('./static/index.html', {'name': 'Happy Router'}),
-    }
-)
 
 
 loop = uasyncio.get_event_loop()
 loop.create_task(app.run())
-loop.run_forever()
+
+try:
+    loop.run_forever()
+finally:
+    print('Closing the serial device.')
+    s.close()
