@@ -79,22 +79,22 @@ async def healthz(req):
 
 async def send_static(req):
     log('{} {}', req.method, req.url)
-    await req.write("HTTP/1.1 200 OK\r\n")
+    await req.write('HTTP/1.1 200 OK\r\n')
 
     filename = 'static' + req.url
 
-    if req.url in ("/", "/index.html"):
-        await req.write("Content-Type: text/html\r\n\r\n")
+    if req.url in ('/', '/index.html'):
+        await req.write('Content-Type: text/html\r\n\r\n')
 	filename = 'static/index.html'
-    elif req.url == "/simple.html":
-        await req.write("Content-Type: text/html\r\n\r\n")
+    elif req.url == '/simple.html':
+        await req.write('Content-Type: text/html\r\n\r\n')
 	filename = 'static/simple.html'
     elif req.url.endswith('.css'):
-        await req.write("Content-Type: text/css\r\n\r\n")
+        await req.write('Content-Type: text/css\r\n\r\n')
     elif req.url.endswith('.js'):
-        await req.write("Content-Type: application/javascript\r\n\r\n")
+        await req.write('Content-Type: application/javascript\r\n\r\n')
     else:
-        await req.write("Content-Type: application/octet-stream\r\n\r\n")
+        await req.write('Content-Type: application/octet-stream\r\n\r\n')
 
     await send_file(req, filename, segment=16384)
 
