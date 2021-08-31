@@ -1,6 +1,6 @@
 [submodule "nanoweb"]
-	path = api/nanoweb
+	path = server/nanoweb
 	url = https://github.com/hugokernel/micropython-nanoweb.git
 [submodule "api/serial"]
-	path = api/serial
+	path = server/serial
 	url = https://github.com/iRobotEducation/micropython-serial
