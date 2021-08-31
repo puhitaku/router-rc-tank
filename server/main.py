@@ -86,6 +86,9 @@ async def send_static(req):
     if req.url in ("/", "/index.html"):
         await req.write("Content-Type: text/html\r\n\r\n")
 	filename = 'static/index.html'
+    elif req.url == "/simple.html":
+        await req.write("Content-Type: text/html\r\n\r\n")
+	filename = 'static/simple.html'
     elif req.url.endswith('.css'):
         await req.write("Content-Type: text/css\r\n\r\n")
     elif req.url.endswith('.js'):
@@ -93,13 +96,14 @@ async def send_static(req):
     else:
         await req.write("Content-Type: application/octet-stream\r\n\r\n")
 
-    await send_file(req, filename, segment=262144)
+    await send_file(req, filename, segment=16384)
 
 
 app.routes.update(
     {
         '/': send_static,
         '/index.html': send_static,
+        '/simple.html': send_static,
         '/assets/*': send_static,
     }
 )

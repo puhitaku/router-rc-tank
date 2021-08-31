@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>RC Router</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <script src="/assets/jquery-3.5.1.slim.min.js"></script>
+</head>
+<body>
+  <button id="forward">↑</button>
+  <button id="left">←</button>
+  <button id="right">→</button>
+  <button id="back">↓</button>
+  <button id="stop">Stop</button>
+
+  <script>
+    function request_fn(op) {
+      return function() {
+        var r = new XMLHttpRequest();
+        r.open("PUT", document.location.origin + "/operation", true);
+        r.setRequestHeader("Content-Type", "application/json");
+        r.onreadystatechange = () => {
+          if (r.readyState != 4 || r.status != 200) return;
+          console.log("Sent successfully: " + r.responseText);
+        };
+        r.send(JSON.stringify({"operation": op}));
+      }
+    }
+  
+    $("#forward").on("click", request_fn("f"));
+    $("#back").on("click", request_fn("b"));
+    $("#left").on("click", request_fn("l"));
+    $("#right").on("click", request_fn("r"));
+    $("#stop").on("click", request_fn("s"));
+  </script>
+</body>
+</html>
