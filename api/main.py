@@ -1,7 +1,7 @@
 import json
 import time
 import uasyncio
-from nanoweb.nanoweb import Nanoweb
+from nanoweb.nanoweb import Nanoweb, send_file
 from serial.serial import Serial
 
 s = Serial('/dev/ttyACM0', 115200)
@@ -75,6 +75,34 @@ async def operation(req):
 @respond
 async def healthz(req):
     return 200, {'message': "I'm as ready as I'll ever be!"}
+
+
+async def send_static(req):
+    log('{} {}', req.method, req.url)
+    await req.write("HTTP/1.1 200 OK\r\n")
+
+    filename = 'static' + req.url
+
+    if req.url in ("/", "/index.html"):
+        await req.write("Content-Type: text/html\r\n\r\n")
+	filename = 'static/index.html'
+    elif req.url.endswith('.css'):
+        await req.write("Content-Type: text/css\r\n\r\n")
+    elif req.url.endswith('.js'):
+        await req.write("Content-Type: application/javascript\r\n\r\n")
+    else:
+        await req.write("Content-Type: application/octet-stream\r\n\r\n")
+
+    await send_file(req, filename, segment=262144)
+
+
+app.routes.update(
+    {
+        '/': send_static,
+        '/index.html': send_static,
+        '/assets/*': send_static,
+    }
+)
 
 
 loop = uasyncio.get_event_loop()
