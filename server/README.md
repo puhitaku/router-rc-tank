@@ -13,14 +13,14 @@
 2. 実機に転送する
 
     ```sh
-    $ scp -r api root@{address_of_the_router}:~
+    $ scp -r server root@{address_of_the_router}:~
     ```
 
 3. 実機で実行する
 
     ```sh
     $ ssh root@{address_of_the_router}
-    $ micropython api/main.py
+    $ micropython server/main.py
     ```
 
 4. リクエストを送る
