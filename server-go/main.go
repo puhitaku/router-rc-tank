@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -36,41 +36,50 @@ func (s *SerialPort) Write(p []byte) (n int, err error) {
 	return s.port.Write(p)
 }
 
+func (s *SerialPort) Close() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.port.Close()
+}
+
 // Models
+
+type Hello struct {
+	Message string `json:"message"`
+}
 
 type Request struct {
 	Operation string `json:"operation,omitempty"`
 }
 
 type Response struct {
-	Operation string  `json:"operation"`
-	Error     *string `json:"error"`
-}
-
-func (r Response) Marshal() []byte {
-	j, _ := json.Marshal(r) // this will never fail
-	return j
+	Operation string `json:"operation,omitempty"`
+	Error     string `json:"error,omitempty"`
 }
 
 // Shorthands
 
-func StrPtr(s string) *string {
-	return &s
-}
-
-func ReplyAndLogError(w http.ResponseWriter, status int, operation, error string, a ...any) {
+func replyAndLogError(w http.ResponseWriter, status int, operation, error string, a ...any) {
 	r := Response{
 		Operation: operation,
-		Error:     StrPtr(fmt.Sprintf(error, a...)),
+		Error:     fmt.Sprintf(error, a...),
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	n, err := w.Write(r.Marshal())
+	res, err := json.Marshal(r)
+	if err != nil {
+		log.Printf("failed to marshal the response: %s", err)
+		return
+	}
+
+	n, err := w.Write(res)
 	if err != nil {
 		log.Printf("failed to write the response: %s (written = %d B)", err, n)
+		return
 	}
 
-	log.Printf(*r.Error)
+	log.Printf(r.Error)
 }
 
 func main() {
@@ -78,66 +87,90 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer s.Close()
 
-	r := chi.NewRouter()
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			ctx := context.WithValue(r.Context(), "serial", s)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	})
-	r.Get("/healthz", HealthzHandler)
-	r.Put("/operation", OperationPutHandler)
-
-	if err := http.ListenAndServe(":8080", r); err != nil {
+	if err := Main(s); err != nil {
 		panic(err)
 	}
 }
 
-func HealthzHandler(w http.ResponseWriter, _ *http.Request) {
-	n, err := w.Write([]byte("{\"message\":\"I'm as ready as I'll ever be!\"}"))
+func Main(wc io.WriteCloser) error {
+	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := context.WithValue(r.Context(), "serial", wc)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	})
+	r.Get("/healthz", getHealthzHandler)
+	r.Put("/operation", putOperationHandler)
+
+	return http.ListenAndServe(":8080", r)
+}
+
+func getHealthzHandler(w http.ResponseWriter, _ *http.Request) {
+	j, err := json.Marshal(Hello{Message: "I'm as ready as I'll ever be!"})
+	if err != nil {
+		log.Printf("failed to marshal the healthz response: %s", err)
+		return
+	}
+
+	n, err := w.Write(j)
 	if err != nil {
 		log.Printf("failed to write the response: %s (written = %d B)", err, n)
 	}
 }
 
-func OperationPutHandler(w http.ResponseWriter, r *http.Request) {
-	s, ok := r.Context().Value("serial").(*SerialPort)
+func putOperationHandler(w http.ResponseWriter, r *http.Request) {
+	s, ok := r.Context().Value("serial").(io.WriteCloser)
 	if !ok {
 		panic("failed to assert the SerialPort struct")
 	}
 
-	body, err := ioutil.ReadAll(r.Body)
+	contentType := r.Header.Get("Content-Type")
+	if contentType != "application/json" {
+		replyAndLogError(w, http.StatusBadRequest, "", "Content-Type shall be application/json, not %s", contentType)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		ReplyAndLogError(w, http.StatusInternalServerError, "", "failed to read the request body: %s", err)
+		replyAndLogError(w, http.StatusInternalServerError, "", "failed to read the request body: %s", err)
 		return
 	}
 
 	var o Request
 	err = json.Unmarshal(body, &o)
 	if err != nil {
-		ReplyAndLogError(w, http.StatusInternalServerError, "", "failed to unmarshal the body: %s", err)
+		replyAndLogError(w, http.StatusInternalServerError, "", "failed to unmarshal the body: %s", err)
 		return
 	}
 
 	if len(o.Operation) != 1 {
-		ReplyAndLogError(w, http.StatusBadRequest, "", "invalid operation: length must be 1")
+		replyAndLogError(w, http.StatusBadRequest, "", "invalid operation: length must be 1")
 		return
 	} else if strings.Index("fbrls", o.Operation) == -1 {
-		ReplyAndLogError(w, http.StatusBadRequest, o.Operation, "unknown operation: %s", o.Operation)
+		replyAndLogError(w, http.StatusBadRequest, o.Operation, "unknown operation: %s", o.Operation)
 		return
 	}
 
 	_, err = s.Write([]byte(o.Operation))
 	if err != nil {
-		ReplyAndLogError(w, http.StatusInternalServerError, o.Operation, "failed to write the direction to the MCU: %s", err)
+		replyAndLogError(w, http.StatusInternalServerError, o.Operation, "failed to write the direction to the MCU: %s", err)
 		return
 	}
 
-	_, err = w.Write(Response{Operation: o.Operation}.Marshal())
+	res := Response{Operation: o.Operation}
+	j, err := json.Marshal(res)
 	if err != nil {
-		// w.WriteHeader and ReplyAndLogError can't be called here since writing the header
-		// and the body had already attempted (and failed)
+		log.Printf("failed to marshal the response: %s", err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, err = w.Write(j)
+	if err != nil {
+		// w.WriteHeader and replyAndLogError can't be called here since writing the response was failed
 		log.Printf("failed to write the response: %s", err)
 	}
 }
