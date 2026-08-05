@@ -1,7 +1,13 @@
 import json
+import os
+import sys
 import time
 import uasyncio
+
 from nanoweb.nanoweb import Nanoweb, send_file
+
+# Add the serial submodule's path to fix its import path issue
+sys.path.append(f'{os.getenv('PWD')}/serial')
 from serial.serial import Serial
 
 s = Serial('/dev/ttyACM0', 115200)
