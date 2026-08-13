@@ -17,7 +17,7 @@ op = 's'
 
 def log(fmt, *args):
     t = time.localtime()
-    print('[{}]'.format(time.strftime('%Y-%m-%d %H:%M:%S')), fmt.format(*args))
+    print(fmt.format(*args))
 
 
 def respond(fn):
