@@ -4,7 +4,7 @@ import sys
 import time
 import uasyncio
 
-from nanoweb.nanoweb import Nanoweb, send_file
+from nanoweb import Nanoweb, send_file
 
 # Add the serial submodule's path to fix its import path issue
 sys.path.append(f'{os.getenv('PWD')}/serial')
